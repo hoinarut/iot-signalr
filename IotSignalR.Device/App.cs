@@ -13,7 +13,7 @@ namespace IotSignalR.Device
         public App(IConfiguration configuration)
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(configuration["DevicesHubUrl"])
+                .WithUrl($"{configuration["DevicesHubUrl"]}?isDevice=true")
                 .Build();
             _timer = new PeriodicTimer(TimeSpan.FromSeconds(configuration.GetValue<int>("HeartbeatIntervalSeconds")));
             _clientNumber = configuration.GetValue<int>("ClientNumber");

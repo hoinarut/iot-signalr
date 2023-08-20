@@ -11,7 +11,8 @@ namespace IotSignalR.Manager
         public App(IConfiguration configuration)
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(configuration["DevicesHubUrl"])
+                .WithAutomaticReconnect()
+                .WithUrl($"{configuration["DevicesHubUrl"]}?isDevice=false")
                 .Build();
         }
         public async Task Run()
