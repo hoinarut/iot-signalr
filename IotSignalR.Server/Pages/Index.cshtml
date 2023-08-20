@@ -1,10 +1,17 @@
 ﻿@page
-@model IndexModel
+@model IotSignalR.Server.Pages.IndexModel
 @{
     ViewData["Title"] = "Home page";
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    <h5 class="display-5">Connected Devices</h5>
+    <div id="devices">
+        
+    </div>
+    @* <ul id="devices"> *@
+    @* </ul> *@
 </div>
+
+<script src="~/js/signalr/dist/browser/signalr.js"></script>
+<script src="~/js/devices.js"></script>

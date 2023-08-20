@@ -1,7 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
+﻿using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Test.Pages;
+namespace IotSignalR.Server.Pages;
 
 public class IndexModel : PageModel
 {
