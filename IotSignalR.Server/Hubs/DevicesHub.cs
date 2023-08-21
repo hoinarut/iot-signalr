@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using IotSignalR.Core.Models;
+using Microsoft.AspNetCore.SignalR;
 
 namespace IotSignalR.Server.Hubs
 {
     public static class ConnectionsHandler
     {
-        public static readonly HashSet<string> ConnectedIds = new();
+        public static readonly List<ManagedDevice> Devices = new();
     }
 
     public class DevicesHub : Hub
@@ -15,8 +16,18 @@ namespace IotSignalR.Server.Hubs
             Console.WriteLine($"Connection from {Context.ConnectionId} is {(isDevice ? "device" : "manager")}");
             if (isDevice)
             {
-                ConnectionsHandler.ConnectedIds.Add(Context.ConnectionId);
-                await Clients.Group("Manager").SendAsync("DeviceConnected", Context.ConnectionId);
+                var deviceId = Context.GetHttpContext()?.Request.Query["deviceId"] ??
+                               throw new InvalidOperationException(
+                                   $"Could not retrieve the device id for client {Context.ConnectionId}");
+                var device = new ManagedDevice
+                {
+                    ConnectionId = Context.ConnectionId,
+                    IsManager = false,
+                    DeviceId = deviceId,
+                    LastPollTime = DateTime.UtcNow
+                };
+                ConnectionsHandler.Devices.Add(device);
+                await Clients.Group("Manager").SendAsync("DeviceConnected", device);
             }
 
             return base.OnConnectedAsync();
@@ -24,31 +35,49 @@ namespace IotSignalR.Server.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            if (ConnectionsHandler.ConnectedIds.Any(s => s == Context.ConnectionId))
+            var device = ConnectionsHandler.Devices.FirstOrDefault(s => s.ConnectionId == Context.ConnectionId);
+            if (device is not null)
             {
-                await Clients.Group("Manager").SendAsync("DeviceDisconnected", Context.ConnectionId);
-                ConnectionsHandler.ConnectedIds.Remove(Context.ConnectionId);
+                await Clients.Group("Manager").SendAsync("DeviceDisconnected", device.DeviceId);
+                ConnectionsHandler.Devices.Remove(device);
             }
 
             Console.WriteLine($"connection from {Context.ConnectionId} disconnected");
             await base.OnDisconnectedAsync(exception);
         }
 
-        public async Task Heartbeat(string clientId)
+        public async Task Heartbeat(string deviceId)
         {
-            await Clients.Group("Manager")
-                .SendAsync("OnHeartbeat", $"Received heartbeat from {clientId} at {DateTime.UtcNow}");
+            var device = ConnectionsHandler.Devices.FirstOrDefault(s => s.DeviceId == deviceId);
+            if (device is not null)
+            {
+                var deviceIndex = ConnectionsHandler.Devices.IndexOf(device);
+                device.LastPollTime = DateTime.UtcNow;
+                ConnectionsHandler.Devices[deviceIndex] = device;
+                await Clients.Group("Manager")
+                    .SendAsync("OnHeartbeat", new HeartbeatEventPayload
+                    {
+                        DeviceId = deviceId,
+                        TimeStamp = device.LastPollTime
+                    });
+            }
         }
 
         public async Task RegisterManager()
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, "Manager");
-            ConnectionsHandler.ConnectedIds.Remove(Context.ConnectionId);
+            var device = new ManagedDevice
+            {
+                ConnectionId = Context.ConnectionId,
+                IsManager = true,
+                DeviceId = Guid.NewGuid().ToString()
+            };
+            ConnectionsHandler.Devices.Add(device);
         }
 
-        public Task<List<string>> GetAllDevices()
+        public Task<List<ManagedDevice>> GetAllDevices()
         {
-            return Task.FromResult(ConnectionsHandler.ConnectedIds.ToList());
+            return Task.FromResult(ConnectionsHandler.Devices.Where(s => s.IsManager == false).ToList());
         }
     }
 }
