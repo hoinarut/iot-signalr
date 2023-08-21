@@ -1,20 +1,20 @@
 ﻿using IotSignalR.Core.Models;
+using IotSignalR.Persistence;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace IotSignalR.Server.Hubs
 {
-    public static class ConnectionsHandler
-    {
-        public static readonly List<ManagedDevice> Devices = new();
-    }
-
     public class DevicesHub : Hub
     {
         private readonly ILogger<DevicesHub> _logger;
+        private readonly DevicesDbContext _dbContext;
 
-        public DevicesHub(ILogger<DevicesHub> logger)
+        public DevicesHub(ILogger<DevicesHub> logger,
+            DevicesDbContext dbContext)
         {
             _logger = logger;
+            _dbContext = dbContext;
         }
 
         public override async Task<Task> OnConnectedAsync()
@@ -23,17 +23,31 @@ namespace IotSignalR.Server.Hubs
             Console.WriteLine($"Connection from {Context.ConnectionId} is {(isDevice ? "device" : "manager")}");
             if (isDevice)
             {
-                var deviceId = Context.GetHttpContext()?.Request.Query["deviceId"] ??
+                var deviceId = Context.GetHttpContext()?.Request.Query["deviceId"].ToString() ??
                                throw new InvalidOperationException(
                                    $"Could not retrieve the device id for client {Context.ConnectionId}");
-                var device = new ManagedDevice
+                var device = _dbContext.ManagedDevices.FirstOrDefault(d => d.DeviceId == deviceId);
+                if (device == null)
                 {
-                    ConnectionId = Context.ConnectionId,
-                    IsManager = false,
-                    DeviceId = deviceId,
-                    LastPollTime = DateTime.UtcNow
-                };
-                ConnectionsHandler.Devices.Add(device);
+                    device = new ManagedDevice
+                    {
+                        ConnectionId = Context.ConnectionId,
+                        IsManager = false,
+                        DeviceId = deviceId,
+                        LastPollTime = DateTime.UtcNow,
+                        IsConnected = true
+                    };
+                    _dbContext.ManagedDevices.Add(device);
+                }
+                else
+                {
+                    device.ConnectionId = Context.ConnectionId;
+                    device.IsConnected = true;
+                    device.LastPollTime = DateTime.UtcNow;
+                    _dbContext.ManagedDevices.Update(device);
+                }
+
+                await _dbContext.SaveChangesAsync();
                 await Clients.Group("Manager").SendAsync("DeviceConnected", device);
             }
 
@@ -42,11 +56,13 @@ namespace IotSignalR.Server.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            var device = ConnectionsHandler.Devices.FirstOrDefault(s => s.ConnectionId == Context.ConnectionId);
+            var device = _dbContext.ManagedDevices.FirstOrDefault(s => s.ConnectionId == Context.ConnectionId);
             if (device is not null)
             {
-                await Clients.Group("Manager").SendAsync("DeviceDisconnected", device.DeviceId);
-                ConnectionsHandler.Devices.Remove(device);
+                device.IsConnected = false;
+                _dbContext.ManagedDevices.Update(device);
+                await _dbContext.SaveChangesAsync();
+                await Clients.Group("Manager").SendAsync("DeviceDisconnected", device);
             }
 
             Console.WriteLine($"connection from {Context.ConnectionId} disconnected");
@@ -55,12 +71,12 @@ namespace IotSignalR.Server.Hubs
 
         public async Task Heartbeat(string deviceId)
         {
-            var device = ConnectionsHandler.Devices.FirstOrDefault(s => s.DeviceId == deviceId);
+            var device = _dbContext.ManagedDevices.FirstOrDefault(s => s.DeviceId == deviceId);
             if (device is not null)
             {
-                var deviceIndex = ConnectionsHandler.Devices.IndexOf(device);
                 device.LastPollTime = DateTime.UtcNow;
-                ConnectionsHandler.Devices[deviceIndex] = device;
+                _dbContext.ManagedDevices.Update(device);
+                await _dbContext.SaveChangesAsync();
                 await Clients.Group("Manager")
                     .SendAsync("OnHeartbeat", new HeartbeatEventPayload
                     {
@@ -83,12 +99,13 @@ namespace IotSignalR.Server.Hubs
                 IsManager = true,
                 DeviceId = Guid.NewGuid().ToString()
             };
-            ConnectionsHandler.Devices.Add(device);
+            _dbContext.ManagedDevices.Add(device);
+            await _dbContext.SaveChangesAsync();
         }
 
         public Task<List<ManagedDevice>> GetAllDevices()
         {
-            return Task.FromResult(ConnectionsHandler.Devices.Where(s => s.IsManager == false).ToList());
+            return _dbContext.ManagedDevices.Where(s => s.IsManager == false).ToListAsync();
         }
     }
 }

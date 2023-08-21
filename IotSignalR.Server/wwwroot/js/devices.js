@@ -6,14 +6,14 @@ connection.on("DeviceConnected", function (device) {
     removeNoDevices();
     addDeviceToTable(device);
 });
-connection.on("DeviceDisconnected", function (deviceId) {
-    console.log(`Client ${deviceId} disconnected`);
-    removeDevice(deviceId);
+connection.on("DeviceDisconnected", function (device) {
+    console.log(`Client ${device.deviceId} disconnected`);
+    updateDevice(device);
 });
 
 connection.on("OnHeartbeat", function (event) {
     console.log(`Heartbeat from ${event.deviceId} at ${event.timeStamp}`);
-    updateDevice(event.deviceId, event.timeStamp);
+    updateDeviceLastPollTime(event.deviceId, event.timeStamp);
 });
 
 connection.start().then(async function () {
@@ -69,21 +69,45 @@ function createDevicesElement() {
     const lastPollTimeCell = document.createElement("th");
     lastPollTimeCell.innerHTML = "Last Poll Time";
     tableHeader.appendChild(lastPollTimeCell);
+    const connectionStateCell = document.createElement("th");
+    connectionStateCell.innerHTML = "Connection State";
+    tableHeader.appendChild(connectionStateCell);
     table.appendChild(tableHeader)
     document.getElementById("devices").appendChild(table);
     return table;
 }
 
 function addDeviceToTable(device) {
-    const devicesElem = getDevicesElement();
-    const row = devicesElem.insertRow(-1);
-    row.classList.add("device");
-    row.setAttribute("id", device.deviceId);
-    const deviceIdCell = row.insertCell(0);
-    const lastPollTimeCell = row.insertCell(1);
+    const deviceRow = document.getElementById(device.deviceId);
+    if (deviceRow) {
+        updateDevice(device);
+    } else {
+        const devicesElem = getDevicesElement();
+        const row = devicesElem.insertRow(-1);
+        row.classList.add("device");
+        row.setAttribute("id", device.deviceId);
+        const deviceIdCell = row.insertCell(0);
+        const lastPollTimeCell = row.insertCell(1);
+        const connectionStateCell = row.insertCell(2);
 
-    deviceIdCell.innerHTML = device.deviceId;
-    lastPollTimeCell.innerHTML = device.lastPollTime.toLocaleString();
+        deviceIdCell.innerHTML = device.deviceId;
+        lastPollTimeCell.innerHTML = formatDate(device.lastPollTime);
+        connectionStateCell.innerHTML = device.isConnected ? "Online" : "Offline";
+        connectionStateCell.style.backgroundColor = device.isConnected ? "green" : "indianred";
+        connectionStateCell.style.color = "white";
+        connectionStateCell.style.fontWeight = "bold";
+    }
+}
+
+function updateDevice(device) {
+    const deviceElement = document.getElementById(device.deviceId);
+    if (deviceElement) {
+        const lastPollTimeCell = deviceElement.children.item(1);
+        lastPollTimeCell.innerHTML = formatDate(device.lastPollTime);
+        const connectionStateCell = deviceElement.children.item(2);
+        connectionStateCell.innerHTML = device.isConnected ? "Online" : "Offline";
+        connectionStateCell.style.backgroundColor = device.isConnected ? "green" : "indianred";
+    }
 }
 
 function removeDevice(deviceId) {
@@ -99,15 +123,19 @@ function removeDevice(deviceId) {
     }
 }
 
-function updateDevice(deviceId, timeStamp) {
+function updateDeviceLastPollTime(deviceId, timeStamp) {
     const deviceElement = document.getElementById(deviceId);
     if (deviceElement) {
         const lastPollTimeCell = deviceElement.cells[1];
-        lastPollTimeCell.innerHTML = timeStamp.toLocaleString();
+        lastPollTimeCell.innerHTML = formatDate(timeStamp);
         lastPollTimeCell.classList.add("updated");
         const animated = document.querySelector(".updated");
         animated.addEventListener("animationend", () => {
             lastPollTimeCell.classList.remove("updated");
         });
     }
+}
+
+function formatDate(date) {
+    return new Date(date).toLocaleString().replace(",", "");
 }

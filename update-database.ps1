@@ -1,0 +1,1 @@
+dotnet ef database update --startup-project ./IotSignalR.Server/IotSignalR.Server.csproj --project ./IotSignalR.Persistence/IotSignalR.Persistence.csproj
