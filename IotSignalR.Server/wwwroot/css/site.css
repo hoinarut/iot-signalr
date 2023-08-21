@@ -20,3 +20,31 @@ html {
 body {
   margin-bottom: 60px;
 }
+
+.table {
+  border: 1px solid #dee2e6;
+  border-collapse: collapse;
+}
+
+.table td, .table th {
+  padding: 0.75rem;
+  vertical-align: top;
+  text-align: center;
+  border: 1px solid #dee2e6;
+}
+
+.table th {
+  background-color: #dee2e6;
+}
+
+.updated {
+  animation: changeColor 2s 1;
+}
+
+@keyframes changeColor
+{
+  0%      {background:none;}
+  25%     {background:palegreen;}
+  75%     {background:palegreen;}
+  100%    {background:none;}
+}

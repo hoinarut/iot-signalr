@@ -10,6 +10,13 @@ namespace IotSignalR.Server.Hubs
 
     public class DevicesHub : Hub
     {
+        private readonly ILogger<DevicesHub> _logger;
+
+        public DevicesHub(ILogger<DevicesHub> logger)
+        {
+            _logger = logger;
+        }
+
         public override async Task<Task> OnConnectedAsync()
         {
             var isDevice = bool.Parse(Context.GetHttpContext()?.Request.Query["isDevice"] ?? false.ToString());
@@ -60,6 +67,10 @@ namespace IotSignalR.Server.Hubs
                         DeviceId = deviceId,
                         TimeStamp = device.LastPollTime
                     });
+            }
+            else
+            {
+                _logger.LogWarning("Received Heartbeat from unknown device {DeviceId}", deviceId);
             }
         }
 
